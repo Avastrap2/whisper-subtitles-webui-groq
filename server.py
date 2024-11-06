@@ -4,6 +4,7 @@ import argparse
 import tempfile
 import torch
 import whisper
+import requests
 from whisper.utils import get_writer
 
 import ytdlp_functions
@@ -22,29 +23,26 @@ def download_video(url, quick, language, model, task, addSrtToVideo):
 
 
 def transcribe(inputFile, language, model, task, addSrtToVideo):
-    print("gpu available: " + str(torch.cuda.is_available()))
-    gpu = torch.cuda.is_available()
-    model = whisper.load_model(model)
-    # ytdlp_functions will give us a string, gradio filepicker an actual file
     inputFileCleared = inputFile if isinstance(inputFile, str) else inputFile.name
 
-    whisperOutput = model.transcribe(
-        inputFileCleared,
-        task=task,
-        language=language,
-        verbose=True,
-        fp16=gpu
+    # Call the groq API
+    response = requests.post(
+        'https://api.groq.com/openai/v1',
+        json={
+            'input_file': inputFileCleared,
+            'language': language,
+            'model': model,
+            'task': task
+        }
     )
 
+    whisperOutput = response.json()
     writer = get_writer("srt", str(tempfile.gettempdir()))
     writer(whisperOutput, inputFileCleared)
-    # broken srt filepaths. Use those if tempdir acts weird.
-    # srtFile = f"{inputFileCleared}" + ".srt"
-    # anotherSrtFile = inputFileCleared.rsplit(".", 2)[0] + ".srt"
+    
     srtFile = inputFileCleared.rsplit(".", 1)[0] + ".srt"
     if addSrtToVideo:
         video_out = inputFileCleared + "_output.mkv"
-
         input_ffmpeg = ffmpeg.input(inputFileCleared)
         input_ffmpeg_sub = ffmpeg.input(srtFile)
 
